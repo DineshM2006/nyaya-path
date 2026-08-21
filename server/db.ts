@@ -1,6 +1,6 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users } from "../drizzle/schema";
+import { anonymousSessions, chatMessages, InsertUser, users } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -89,4 +89,28 @@ export async function getUserByOpenId(openId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// TODO: add feature queries here as your schema grows.
+export async function ensureAnonymousSession(token: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(anonymousSessions).values({ token }).onDuplicateKeyUpdate({
+    set: { updatedAt: new Date() },
+  });
+}
+
+export async function getChatHistory(sessionToken: string, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+
+  return db.select().from(chatMessages)
+    .where(eq(chatMessages.sessionToken, sessionToken))
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    .limit(limit);
+}
+
+export async function addChatMessage(sessionToken: string, role: "user" | "assistant", content: string) {
+  const db = await getDb();
+  if (!db) return;
+
+  await db.insert(chatMessages).values({ sessionToken, role, content });
+}
